@@ -10,7 +10,7 @@ camera = PiCamera()
 # Set the camera resolution
 camera.resolution = (640, 480)
  
-# Set the number of frames per second
+# Set the number of frames per second   
 camera.framerate = 32
  
 # Generates a 3D RGB array and stores it in rawCapture
