@@ -1,21 +1,17 @@
 # import the necessary packages
 from picamera.array import PiRGBArray # Generates a 3D RGB array
 from picamera import PiCamera # Provides a Python interface for the RPi Camera Module
-import time # Provides time-related functions
+# import time # Provides time-related functions
 import cv2 # OpenCV library
-import math
+# import math
 import numpy as np
 
-from gpiozero import Motor
-from time import sleep
+from motors import *
 
 from utils import *
+from sign import *
 
-motor_left =  Motor(forward=27, backward=17)
-motor_right = Motor(forward=16, backward=26)
-
-normal_speed = 0.6
-forced_speed = 1
+from led import *
 
 # Initialize the camera
 camera = PiCamera()
@@ -33,12 +29,11 @@ raw_capture = PiRGBArray(camera, size=(image_width, image_height))
  
 # Wait a certain number of seconds to allow the camera time to warmup
 time.sleep(0.1)
-
-elapsed = 0
-elapsed_tick = 100
  
 motor_left.forward(normal_speed)
 motor_right.forward(normal_speed)
+
+red_sign_observed = False
 
 # Capture frames continuously from the camera
 for frame in camera.capture_continuous(raw_capture, format="bgr", use_video_port=True):
@@ -48,7 +43,6 @@ for frame in camera.capture_continuous(raw_capture, format="bgr", use_video_port
     image = np.array(image)
     image[0:2] = [0, 0, 0]
     image[image_height-10:image_height] = [0, 0, 0]
-    # image = np.float32(image)
      
     # Display the frame using OpenCV
     cv2.imshow("Frame", image)
@@ -58,26 +52,16 @@ for frame in camera.capture_continuous(raw_capture, format="bgr", use_video_port
 
     cv2.imshow("gray", tr)
 
-    
-    #tr = 255 - tr
-    #img_cvt = tr
+    red_mask = load_red_mask(image)
+
+    cv2.imshow("red mask", red_mask)
+
     img_cvt = tr
 
-    #ret, threshold_image = cv2.threshold(img_cvt, 150, 255, cv2.THRESH_BINARY)
-    # contours, hierarchy = cv2.findContours(threshold_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    
     contours, hierarchy = cv2.findContours(tr, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
     lane = None
     lane_pos = (0, 0)
-    
-    # elapsed += 1
-
-    """if elapsed < elapsed_tick:
-        raw_capture.truncate(0)
-        continue
-    else:
-        elapsed = 0"""
 
     for n, cnt in enumerate(contours):
         (cx, cy), radius = cv2.minEnclosingCircle(cnt)
@@ -105,27 +89,17 @@ for frame in camera.capture_continuous(raw_capture, format="bgr", use_video_port
                     if y > lane_pos[1]:
                         lane_pos = (x, y)
                         lane = cnt
+    
+    red = determine_red_sign(red_mask)
 
-                #if x 
-                #print(abs(cx / x), abs(cy / y))
-        
-           
-        #if 0.98 < abs(cx / x) < 1.02 and\
-        #   0.98 < abs(cy / y) < 1.02:
-                #cv2.circle(tr, (cx, cy), radius, (0, 255, 0), 2)
-                #cv2.circle(tr, (x, y), 10, (0, 0, 255), 3)
-        # print(m)
-        # if hierarchy[0][n][3] != -1:
+    if red_sign_observed and not red:
+        red_sign_observed = False
+        led_red()
+        stop(2)
+    if red:
+        red_sign_observed = True
 
-        #epsilon = 0.001 * cv2.arcLength(cnt, True)
-        #poly = cv2.approxPolyDP(cnt, epsilon, True)
-        #cv2.drawContours(image, [poly], -1, (255, 0, 0), 3)
-        """
-        image = np.float32(image)
-        epsilon = 0.001 * cv2.arcLength(cnt, True)
-        poly = cv2.approxPolyDP(cnt, epsilon, True)
-        cv2.drawContours(image, [poly], -1, (255, 0, 0), 3)""" #(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
-        # print(len(poly))
+    # MOVEMENT
 
     x, y = lane_pos[0], lane_pos[1]
 
